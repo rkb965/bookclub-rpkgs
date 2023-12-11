@@ -6,6 +6,15 @@ knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 
 # The package within
 
+**Learning objectives:**
+
+- See the potential package in an R script.
+- Key differences between packages and scripts.
+- Define package build time.
+- Avoid side effects.
+
+# The package within
+
 **Purpose**
 
 To walk through the development of a small toy package, with an emphasis on the __package's__ R code and how it differs from R code in a __script__.
@@ -74,7 +83,11 @@ write.csv(dat, file = outfile, quote = FALSE, row.names = FALSE)
 
 - There's a package that lurks within the original script.
     - Suboptimal coding practices like repetitive code and mixing of code and data makes it hard to catch.
-- A good first step is to refactor this code.
+- A good first step is to refactor this code. 
+    - [Martin Fowler's Refactoring: Improving the Design of Existing Code](https://martinfowler.com/books/refactoring.html)
+    - [Jenny Bryan's Code Smells and Feels](https://github.com/jennybc/code-smells-and-feels)
+    - [Emily Riederer's RMarkdown Driven Development (RmdDD)](https://emilyriederer.netlify.app/post/rmarkdown-driven-development/)
+    - [Emily Riederer's RMarkdown Driven Development: the Technical Appendix](https://emilyriederer.netlify.app/post/rmddd-tech-appendix/)
     
 Next version of the script:
 
@@ -240,10 +253,11 @@ write_csv(dat, outfile_path(infile))
 
 Despite calling `library(delta)`, none of the functions were actually available to use.
 
-- Attaching a package does not put the functions in the global workspace.
-      - In contrast to `source()`-ing a file of helper functions, attaching a package does not dump its functions into the global workspace. 
-      - By default, functions in a package are only for internal use
-      - We can export these functions properly by putting `@export` in the roxygen comment above each function (See Section 10.4 for more information on DESCRIPTION)
+- [Attaching](https://r-pkgs.org/dependencies-mindset-background.html#sec-dependencies-attach-vs-load) a package does not put the functions in the global workspace.
+- In contrast to `source()`-ing a file of helper functions, attaching a package does not dump its functions into the global workspace. 
+- By default, functions in a package are only for internal use
+- We can export these functions properly by putting `@export` in the roxygen comment above each function (See Section 10.4 for more information on DESCRIPTION)
+- and re-document (here, just updating the NAMESPACE) with `devtools::document()`
 
 ```{r}
 #' @export
@@ -290,6 +304,7 @@ What is the reason behind this error?
 
 - Package was declared incorrectly
    - While you can load a package using `library(tidyverse)` in a script, dependencies on other packages must be declared in the `DESCRIPTION` 
+   -  [`usethis::use_package`](https://r-pkgs.org/whole-game.html#use_package)
    
    
 ## Echo: a working package
@@ -326,11 +341,11 @@ outfile_path <- function(infile) {
 }
 ```
 
-**Note:** To fix our initial problem with loading a CSV file, we've created a dataframe `lookup_table`. However, Chapter 8 Data provides more guidance and recommendations on how to load datasets properly.
+**Note:** To fix our initial problem with loading a CSV file, we've created a dataframe `lookup_table`. However, Chapter 7 Data provides more guidance and recommendations on how to load datasets properly.
 
-**Other Note:** When calling functions from other packages, we should specify the package that we're using (e.g., dplyr::mutate()). Moreover, we should identify the specific package being used, rather than the meta-package (e.g., do not use tidyverse::mutate())
+**Other Note:** When calling functions from other packages, we should specify the package that we're using (e.g., `dplyr::mutate()`). Moreover, we should identify the specific package being used, rather than the meta-package (e.g., do not use `tidyverse::mutate()`)
 
-- All of the user-facing functions have an `@export` tag in their roxygen comment, which means that devtools::document() adds them correctly to the NAMESPACE file.
+- All of the user-facing functions have an `@export` tag in their roxygen comment, which means that `devtools::document()` adds them correctly to the NAMESPACE file.
 
 This package can be installed, but we receive 1 note and 1 warning:
 
@@ -360,11 +375,18 @@ utils::globalVariables(c("english", "temp"))
 option 2
 english <- temp <- NULL
 ```
+
 The other note we received from R: 
 
 `"Undocumented code objects: ‘celsify_temp’ ‘localize_beach’ ‘outfile_path’ All user-level objects in a package should have documentation entries."` 
 
 This is caused by not documenting exported functions. Using roxygen comments to document it should solve the problem. (Function documentation is discussed in Chapter 16).
+
+Additional details:
+
+- (`utils::globalVariables` example)[https://github.com/tidyverse/dbplyr/blob/7edf5d607fd6b0b897721ea96d1c9ca9401f0f9b/R/backend-redshift.R#L144]
+- (Vignette: Using dplyr in packages)[https://dplyr.tidyverse.org/articles/in-packages.html]
+- (A note on notes)[https://r-pkgs.org/release.html#double-r-cmd-checking]
 
 
 ## Foxtrot: build time vs. run time
@@ -391,7 +413,7 @@ outfile_path <- function(infile) {
 ```
 
 
-**Source of the problem:** The `now <- Sys.time()` function lies outside the `outfile_path` definition, so it is executed when the package is built, but never again. *Code outside your functions is only built once at build time.*
+**Source of the problem:** The `now <- Sys.time()` function lies outside the `outfile_path` definition, so it is executed when the package is built, but never again. *Code outside your functions is only built once at build time* (when the package code is compiled). 
 
 Moving `now <- Sys.time` so that it's no longer top level code:
 
@@ -415,6 +437,7 @@ outfile_path <- function(infile, time = Sys.time()) {
 ## Golf: side effects
 
 A new concern with the timestamp: The timestamps depend on which part of the world you're in.
+
 ```{r, results='hide', warning=FALSE, echo=FALSE}
 suppressPackageStartupMessages(library(tidyverse))
 ```
@@ -482,7 +505,8 @@ The locale in our timestamp is only temporarily modified with the `withr::with_l
 
 - In this example, the mistake we made was changing the user's overall state. 
    - If you have to do this, make sure this is documented explicitly or try to make them reversible
-
+   
+See [withr](https://withr.r-lib.org) for more information
 
 > You need to adopt a different mindset when defining functions inside a package. Try to avoid making any changes to the user’s overall state. If such changes are unavoidable, make sure to reverse them (if possible) or to document them explicitly (if related to the function’s primary purpose).
 
